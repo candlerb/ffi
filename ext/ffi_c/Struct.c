@@ -65,6 +65,7 @@ VALUE rbffi_StructLayoutCharArrayClass = Qnil;
 
 static ID id_pointer_ivar = 0, id_layout_ivar = 0;
 static ID id_get = 0, id_put = 0, id_to_ptr = 0, id_to_s = 0, id_layout = 0;
+static ID id_aset = 0;
 
 static inline char*
 memory_address(VALUE self)
@@ -82,6 +83,23 @@ struct_allocate(VALUE klass)
     s->rbLayout = Qnil;
 
     return obj;
+}
+
+static int
+set_key_value_obj_i(VALUE key, VALUE value, VALUE target)
+{
+    rb_funcall(target, id_aset, 2, key, value);
+    return ST_CONTINUE;
+}
+
+static VALUE
+struct_update(VALUE self, VALUE value)
+{
+    if (TYPE(value) != T_HASH) {
+        rb_raise(rb_eArgError, "need Hash to update from");
+    }
+    rb_hash_foreach(value, set_key_value_obj_i, self);
+    return self;
 }
 
 static VALUE
@@ -108,7 +126,10 @@ struct_initialize(int argc, VALUE* argv, VALUE self)
 
     Data_Get_Struct(s->rbLayout, StructLayout, s->layout);
     
-    if (rbPointer != Qnil) {
+    if (TYPE(rbPointer) == T_HASH) {
+        struct_malloc(s);
+        struct_update(self, rbPointer);
+    } else if (rbPointer != Qnil) {
         s->pointer = MEMORY(rbPointer);
         s->rbPointer = rbPointer;
     } else {
@@ -313,6 +334,12 @@ struct_aset(VALUE self, VALUE fieldName, VALUE value)
     s = struct_validate(self);
 
     rbField = struct_field(s, fieldName);
+    if (TYPE(value) == T_HASH) {
+        rbField = struct_aref(self, fieldName);
+        struct_update(rbField, value);
+        return value;
+    }
+
     f = (StructField *) DATA_PTR(rbField);
     if (f->put != NULL) {
         (*f->put)(f, s, value);
@@ -676,6 +703,7 @@ rbffi_Struct_Init(VALUE moduleFFI)
 
     rb_define_method(StructClass, "[]", struct_aref, 1);
     rb_define_method(StructClass, "[]=", struct_aset, 2);
+    rb_define_method(StructClass, "update", struct_update, 1);
     rb_define_method(StructClass, "null?", struct_null_p, 0);
 
     rb_include_module(rbffi_StructInlineArrayClass, rb_mEnumerable);
@@ -698,5 +726,6 @@ rbffi_Struct_Init(VALUE moduleFFI)
     id_put = rb_intern("put");
     id_to_ptr = rb_intern("to_ptr");
     id_to_s = rb_intern("to_s");
+    id_aset = rb_intern("[]=");
 }
 

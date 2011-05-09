@@ -320,6 +320,41 @@ describe "Struct tests" do
     s[:v] = value
     (s.pointer.get_double(0) - value).abs.should < 0.0001
   end
+
+  it "can initialize from a Hash" do
+    class PairLayout < FFI::Struct
+      layout :a, :int, :b, :int
+    end
+    s = PairLayout.new(:b=>456,:a=>123)
+    s[:a].should == 123
+    s[:b].should == 456
+  end
+  it "can initialize from a partial Hash" do
+    class PairLayout < FFI::Struct
+      layout :a, :int, :b, :int
+    end
+    s = PairLayout.new(:b=>456)
+    s[:a].should == 0
+    s[:b].should == 456
+  end
+  it "can update from a Hash" do
+    class PairLayout < FFI::Struct
+      layout :a, :int, :b, :int
+    end
+    s = PairLayout.new(:b=>456,:a=>123)
+    s.update :b=>999
+    s[:a].should == 123
+    s[:b].should == 999
+  end
+  it "should raise on unknown Hash member" do
+    class PairLayout < FFI::Struct
+      layout :a, :int, :b, :int
+    end
+    lambda {
+      s = PairLayout.new(:c=>456)
+    }.should raise_error
+  end
+
   module EnumFields
     extend FFI::Library
     TestEnum = enum :test_enum, [:c1, 10, :c2, 20, :c3, 30, :c4, 40]
@@ -442,6 +477,21 @@ describe FFI::Struct, ' with a nested struct field'  do
     @cs = LibTest::ContainerStruct.new(LibTest.struct_make_container_struct(123))
     @cs[:ns][:i] = 456
     LibTest.struct_align_nested_struct(@cs.to_ptr).should == 456
+  end
+  it 'should update nested member from a Hash' do
+    @cs = LibTest::ContainerStruct.new(LibTest.struct_make_container_struct(123))
+    @cs[:ns] = {:i=>456}
+    LibTest.struct_align_nested_struct(@cs.to_ptr).should == 456
+  end
+  it 'should initialize from a nested Hash' do
+    res = LibTest::ContainerStruct.new(:first=>123, :ns=>{:i=>456})
+    res[:first].should == 123
+    res[:ns][:i].should == 456
+  end
+  it 'should raise on unknown nested member' do
+    lambda {
+      LibTest::ContainerStruct.new(:first=>123, :ns=>{:j=>456})
+    }.should raise_error
   end
 end
 
